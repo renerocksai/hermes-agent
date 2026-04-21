@@ -67,6 +67,7 @@ class Platform(Enum):
     WEIXIN = "weixin"
     BLUEBUBBLES = "bluebubbles"
     QQBOT = "qqbot"
+    NATS = "nats"
 
 
 @dataclass
@@ -321,7 +322,12 @@ class GatewayConfig:
                 config.extra.get("client_secret") or os.getenv("DINGTALK_CLIENT_SECRET")
             ):
                 connected.append(platform)
-        
+            # NATS uses extra dict: either servers (non-empty list) or context name
+            elif platform == Platform.NATS and (
+                config.extra.get("servers") or config.extra.get("context")
+            ):
+                connected.append(platform)
+
         return connected
     
     def get_home_channel(self, platform: Platform) -> Optional[HomeChannel]:
@@ -1268,6 +1274,31 @@ def _apply_env_overrides(config: GatewayConfig) -> None:
                 chat_id=qq_home,
                 name=os.getenv("QQBOT_HOME_CHANNEL_NAME") or os.getenv(qq_home_name_env, "Home"),
             )
+
+    # NATS
+    nats_url = os.getenv("NATS_URL", "").strip()
+    nats_context = os.getenv("NATS_CONTEXT", "").strip()
+    nats_agent = os.getenv("HERMES_NATS_AGENT", "").strip()
+    nats_owner = os.getenv("HERMES_NATS_OWNER", "").strip()
+    nats_name = os.getenv("HERMES_NATS_NAME", "").strip()
+    nats_session = os.getenv("HERMES_NATS_SESSION", "").strip()
+    if nats_url or nats_context or nats_agent or nats_owner or nats_name or nats_session:
+        if Platform.NATS not in config.platforms:
+            config.platforms[Platform.NATS] = PlatformConfig()
+        config.platforms[Platform.NATS].enabled = True
+        extra = config.platforms[Platform.NATS].extra
+        if nats_url:
+            extra["servers"] = [nats_url]
+        if nats_context:
+            extra["context"] = nats_context
+        if nats_agent:
+            extra["agent"] = nats_agent
+        if nats_owner:
+            extra["owner"] = nats_owner
+        if nats_name:
+            extra["name"] = nats_name
+        if nats_session:
+            extra["session_default"] = nats_session
 
     # Session settings
     idle_minutes = os.getenv("SESSION_IDLE_MINUTES")
